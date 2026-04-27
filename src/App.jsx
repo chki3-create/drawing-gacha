@@ -1,4 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue, runTransaction } from "firebase/database";
+
+// ここにFirebaseの設定を貼る
+const firebaseConfig = {
+  apiKey: "AIzaSyAmT3XtrPzxNV0lArrwZcwQm8PcDi2ujw8",
+  authDomain: "drawing-gacha.firebaseapp.com",
+  databaseURL: "https://drawing-gacha-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "drawing-gacha",
+  storageBucket: "drawing-gacha.firebasestorage.app",
+  messagingSenderId: "827503899933",
+  appId: "1:827503899933:web:0778a16281fc7995829df4",
+  measurementId: "G-K8SPVQGRPN",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 const prompts = [
   "侍の猫","空を飛ぶパン","未来都市の高校生","地下都市","宇宙猫",
@@ -24,34 +41,18 @@ const prompts = [
 ];
 
 const THEME_KEY = "gacha-theme";
-const VIEWS_KEY = "gacha-views";
-const ROLLS_KEY = "gacha-rolls";
 
 const themes = {
   light: {
-    bg: "#f5f0e8",
-    card: "#fffdf8",
-    accent: "#e85d3a",
-    accent2: "#3a7de8",
-    text: "#1a1208",
-    muted: "#6a5a45",
-    border: "rgba(100,70,30,0.35)",
-    badgeBg: "#fff3e0",
-    badgeText: "#8b5e1a",
-    listBg: "#faf6ee",
+    bg: "#f5f0e8", card: "#fffdf8", accent: "#e85d3a", accent2: "#3a7de8",
+    text: "#1a1208", muted: "#6a5a45", border: "rgba(100,70,30,0.35)",
+    badgeBg: "#fff3e0", badgeText: "#8b5e1a", listBg: "#faf6ee",
     statBorder: "rgba(100,70,30,0.3)",
   },
   dark: {
-    bg: "#1a1510",
-    card: "#241e16",
-    accent: "#ff7755",
-    accent2: "#6aabff",
-    text: "#f0e8d8",
-    muted: "#9a8a72",
-    border: "rgba(255,220,150,0.2)",
-    badgeBg: "#2a1f10",
-    badgeText: "#f0a040",
-    listBg: "#1e1810",
+    bg: "#1a1510", card: "#241e16", accent: "#ff7755", accent2: "#6aabff",
+    text: "#f0e8d8", muted: "#9a8a72", border: "rgba(255,220,150,0.2)",
+    badgeBg: "#2a1f10", badgeText: "#f0a040", listBg: "#1e1810",
     statBorder: "rgba(255,220,150,0.15)",
   },
 };
@@ -75,11 +76,12 @@ export default function App() {
   const t = themes[resolvedTheme];
 
   useEffect(() => {
-    const v = parseInt(localStorage.getItem(VIEWS_KEY) || "0") + 1;
-    localStorage.setItem(VIEWS_KEY, v);
-    setViews(v);
-    const r = parseInt(localStorage.getItem(ROLLS_KEY) || "0");
-    setTotalRolls(r);
+    // 閲覧数を+1してFirebaseに保存
+    runTransaction(ref(db, "views"), (v) => (v || 0) + 1);
+
+    // FirebaseからリアルタイムでviswsとtotalRollsを取得
+    onValue(ref(db, "views"), (snap) => setViews(snap.val() || 0));
+    onValue(ref(db, "totalRolls"), (snap) => setTotalRolls(snap.val() || 0));
   }, []);
 
   useEffect(() => {
@@ -109,9 +111,8 @@ export default function App() {
     while (idx === lastIdx.current && prompts.length > 1);
     lastIdx.current = idx;
 
-    const r = totalRolls + 1;
-    localStorage.setItem(ROLLS_KEY, r);
-    setTotalRolls(r);
+    // ガチャ回数をFirebaseで+1
+    runTransaction(ref(db, "totalRolls"), (v) => (v || 0) + 1);
 
     setPopping(false);
     setTimeout(() => {
@@ -137,126 +138,68 @@ export default function App() {
 
   const styles = {
     root: {
-      minHeight: "100vh",
-      background: t.bg,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      padding: "2rem 1rem 3rem",
+      minHeight: "100vh", background: t.bg, display: "flex", flexDirection: "column",
+      alignItems: "center", padding: "2rem 1rem 3rem",
       fontFamily: "'M PLUS Rounded 1c', 'Zen Maru Gothic', sans-serif",
-      color: t.text,
-      transition: "background 0.3s, color 0.3s",
+      color: t.text, transition: "background 0.3s, color 0.3s",
     },
     h1: { fontSize: "2rem", fontWeight: 700, letterSpacing: "-0.01em", color: t.text },
     h1Span: { color: t.accent },
     subText: { fontSize: "0.85rem", color: t.muted, marginTop: 4, letterSpacing: "0.02em" },
     card: {
-      background: t.card,
-      border: `2px solid ${t.border}`,
-      borderRadius: 20,
-      padding: "2rem 2rem 1.75rem",
-      width: "100%",
-      maxWidth: 440,
+      background: t.card, border: `2px solid ${t.border}`, borderRadius: 20,
+      padding: "2rem 2rem 1.75rem", width: "100%", maxWidth: 440,
       boxShadow: "0 2px 24px rgba(0,0,0,0.08)",
-      transition: "background 0.3s, border-color 0.3s",
-      marginTop: "1rem",
+      transition: "background 0.3s, border-color 0.3s", marginTop: "1rem",
     },
     stats: { display: "flex", gap: 10, marginBottom: "1.5rem" },
     stat: {
-      flex: 1,
-      background: t.badgeBg,
-      borderRadius: 12,
-      border: `1.5px solid ${t.statBorder}`,
-      padding: "0.65rem 0.75rem",
-      textAlign: "center",
-      transition: "background 0.3s",
+      flex: 1, background: t.badgeBg, borderRadius: 12,
+      border: `1.5px solid ${t.statBorder}`, padding: "0.65rem 0.75rem",
+      textAlign: "center", transition: "background 0.3s",
     },
     statLabel: { fontSize: "0.72rem", color: t.badgeText, letterSpacing: "0.05em", marginBottom: 2 },
     statVal: { fontSize: "1.25rem", fontWeight: 700, color: t.badgeText },
     resultBox: {
-      background: t.listBg,
-      border: `2px dashed ${t.border}`,
-      borderRadius: 16,
-      padding: "1.5rem 1rem",
-      textAlign: "center",
-      minHeight: 90,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: "0.6rem",
-      position: "relative",
-      overflow: "hidden",
+      background: t.listBg, border: `2px dashed ${t.border}`, borderRadius: 16,
+      padding: "1.5rem 1rem", textAlign: "center", minHeight: 90,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      marginBottom: "0.6rem", position: "relative", overflow: "hidden",
       transition: "all 0.3s",
     },
     resultText: {
-      fontSize: "1.5rem",
-      fontWeight: 700,
-      color: t.text,
-      letterSpacing: "0.02em",
+      fontSize: "1.5rem", fontWeight: 700, color: t.text, letterSpacing: "0.02em",
       animation: popping ? "pop 0.35s cubic-bezier(0.22,1,0.36,1)" : "none",
     },
     hint: { fontSize: "0.75rem", color: t.muted, marginBottom: "1.25rem", textAlign: "center" },
     btnMain: {
-      width: "100%",
-      padding: "0.9rem",
-      border: "none",
-      borderRadius: 14,
-      background: t.accent,
-      color: "#fff",
-      fontFamily: "inherit",
-      fontSize: "1.05rem",
-      fontWeight: 700,
-      cursor: "pointer",
-      letterSpacing: "0.04em",
-      marginBottom: "0.75rem",
+      width: "100%", padding: "0.9rem", border: "none", borderRadius: 14,
+      background: t.accent, color: "#fff", fontFamily: "inherit",
+      fontSize: "1.05rem", fontWeight: 700, cursor: "pointer",
+      letterSpacing: "0.04em", marginBottom: "0.75rem",
     },
     actions: { display: "flex", gap: 8, marginBottom: "0.75rem" },
     btnSub: {
-      flex: 1,
-      padding: "0.6rem",
-      border: `2px solid ${t.border}`,
-      borderRadius: 11,
-      background: "transparent",
-      color: t.muted,
-      fontFamily: "inherit",
-      fontSize: "0.82rem",
-      fontWeight: 700,
-      cursor: "pointer",
-      letterSpacing: "0.02em",
+      flex: 1, padding: "0.6rem", border: `2px solid ${t.border}`, borderRadius: 11,
+      background: "transparent", color: t.muted, fontFamily: "inherit",
+      fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", letterSpacing: "0.02em",
     },
     themeBar: { display: "flex", gap: 6, justifyContent: "center", marginTop: "0.5rem" },
     themeBtnBase: {
-      padding: "0.4rem 0.9rem",
-      borderRadius: 99,
-      border: `2px solid ${t.border}`,
-      background: "transparent",
-      fontFamily: "inherit",
-      fontSize: "0.78rem",
-      fontWeight: 700,
-      color: t.muted,
-      cursor: "pointer",
-      letterSpacing: "0.04em",
+      padding: "0.4rem 0.9rem", borderRadius: 99, border: `2px solid ${t.border}`,
+      background: "transparent", fontFamily: "inherit", fontSize: "0.78rem",
+      fontWeight: 700, color: t.muted, cursor: "pointer", letterSpacing: "0.04em",
     },
     themeBtnSel: { background: t.accent2, color: "#fff", border: "2px solid transparent" },
     promptList: {
-      display: listOpen ? "flex" : "none",
-      flexDirection: "column",
-      marginTop: "1.25rem",
-      borderRadius: 14,
-      border: `2px solid ${t.border}`,
-      overflow: "hidden",
-      maxHeight: 320,
-      overflowY: "auto",
+      display: listOpen ? "flex" : "none", flexDirection: "column",
+      marginTop: "1.25rem", borderRadius: 14, border: `2px solid ${t.border}`,
+      overflow: "hidden", maxHeight: 320, overflowY: "auto",
     },
     promptItem: {
-      padding: "0.7rem 1rem",
-      fontSize: "0.9rem",
-      color: t.text,
-      background: t.listBg,
-      borderBottom: `1px solid ${t.border}`,
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
+      padding: "0.7rem 1rem", fontSize: "0.9rem", color: t.text,
+      background: t.listBg, borderBottom: `1px solid ${t.border}`,
+      display: "flex", alignItems: "center", gap: 8,
     },
     promptNum: { fontSize: "0.72rem", color: t.muted, minWidth: 26, textAlign: "right" },
   };
@@ -276,16 +219,13 @@ export default function App() {
       `}</style>
 
       <div style={{ textAlign: "center" }}>
-        <h1 style={styles.h1}>
-          🎨 絵のお題<span style={styles.h1Span}>ガチャ</span>
-        </h1>
+        <h1 style={styles.h1}>🎨 絵のお題<span style={styles.h1Span}>ガチャ</span></h1>
         <p style={styles.subText}>イラストのお題をランダムに引こう！</p>
       </div>
 
       <div style={styles.card}>
-        {/* Stats */}
         <div style={styles.stats}>
-          {[["👀 閲覧数", views], ["🎲 ガチャ回数", totalRolls]].map(([label, val]) => (
+          {[["👀 総閲覧数", views], ["🎲 総ガチャ回数", totalRolls]].map(([label, val]) => (
             <div key={label} style={styles.stat}>
               <div style={styles.statLabel}>{label}</div>
               <div style={styles.statVal}>{val}</div>
@@ -293,46 +233,29 @@ export default function App() {
           ))}
         </div>
 
-        {/* Result */}
         <div style={styles.resultBox}>
           <div style={styles.resultText}>{result}</div>
           {particles.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                position: "absolute",
-                pointerEvents: "none",
-                borderRadius: "50%",
-                width: p.size,
-                height: p.size,
-                background: p.color,
-                left: "50%",
-                top: "50%",
-                "--tx": `${p.tx}px`,
-                "--ty": `${p.ty}px`,
-                animation: "burst 0.6s ease-out forwards",
-              }}
-            />
+            <div key={p.id} style={{
+              position: "absolute", pointerEvents: "none", borderRadius: "50%",
+              width: p.size, height: p.size, background: p.color,
+              left: "50%", top: "50%",
+              "--tx": `${p.tx}px`, "--ty": `${p.ty}px`,
+              animation: "burst 0.6s ease-out forwards",
+            }} />
           ))}
         </div>
         <div style={styles.hint}>{hint}</div>
 
-        {/* Main button */}
-        <button style={styles.btnMain} onClick={rollGacha}>
-          🎰 ガチャを回す
-        </button>
+        <button style={styles.btnMain} onClick={rollGacha}>🎰 ガチャを回す</button>
 
-        {/* Sub actions */}
         <div style={styles.actions}>
           <button style={styles.btnSub} onClick={() => setListOpen(!listOpen)}>
             {listOpen ? "✖ 閉じる" : "📋 お題一覧"}
           </button>
-          <button style={styles.btnSub} onClick={share}>
-            📤 シェア
-          </button>
+          <button style={styles.btnSub} onClick={share}>📤 シェア</button>
         </div>
 
-        {/* Theme switcher */}
         <div style={styles.themeBar}>
           {[["light", "☀ ライト"], ["auto", "⚙ 自動"], ["dark", "🌙 ダーク"]].map(([key, label]) => (
             <button
@@ -347,16 +270,12 @@ export default function App() {
           ))}
         </div>
 
-        {/* Prompt list */}
         <div style={styles.promptList}>
           {prompts.map((p, i) => (
-            <div
-              key={i}
-              style={{
-                ...styles.promptItem,
-                ...(i === prompts.length - 1 ? { borderBottom: "none" } : {}),
-              }}
-            >
+            <div key={i} style={{
+              ...styles.promptItem,
+              ...(i === prompts.length - 1 ? { borderBottom: "none" } : {}),
+            }}>
               <span style={styles.promptNum}>{i + 1}</span>
               {p}
             </div>
